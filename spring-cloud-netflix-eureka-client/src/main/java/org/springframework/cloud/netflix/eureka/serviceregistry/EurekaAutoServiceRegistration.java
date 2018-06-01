@@ -20,8 +20,12 @@ package org.springframework.cloud.netflix.eureka.serviceregistry;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import javax.inject.Provider;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.web.servlet.context.ServletWebServerInitializedEvent;
 import org.springframework.cloud.client.discovery.event.InstanceRegisteredEvent;
 import org.springframework.cloud.client.serviceregistry.AutoServiceRegistration;
@@ -52,41 +56,44 @@ public class EurekaAutoServiceRegistration implements AutoServiceRegistration, S
 
 	private EurekaServiceRegistry serviceRegistry;
 
-	private EurekaRegistration registration;
+	private ObjectProvider<EurekaRegistration> registrationProvider;
 
-	public EurekaAutoServiceRegistration(ApplicationContext context, EurekaServiceRegistry serviceRegistry, EurekaRegistration registration) {
+	public EurekaAutoServiceRegistration(ApplicationContext context,
+										 EurekaServiceRegistry serviceRegistry,
+										 ObjectProvider<EurekaRegistration> registrationProvider) {
 		this.context = context;
 		this.serviceRegistry = serviceRegistry;
-		this.registration = registration;
+		this.registrationProvider = registrationProvider;
 	}
 
 	@Override
 	public void start() {
 		// only set the port if the nonSecurePort or securePort is 0 and this.port != 0
+		EurekaRegistration registration = registrationProvider.getIfAvailable();
 		if (this.port.get() != 0) {
-			if (this.registration.getNonSecurePort() == 0) {
-				this.registration.setNonSecurePort(this.port.get());
+			if (registration.getNonSecurePort() == 0) {
+				registration.setNonSecurePort(this.port.get());
 			}
 
-			if (this.registration.getSecurePort() == 0 && this.registration.isSecure()) {
-				this.registration.setSecurePort(this.port.get());
+			if (registration.getSecurePort() == 0 && registration.isSecure()) {
+				registration.setSecurePort(this.port.get());
 			}
 		}
 
 		// only initialize if nonSecurePort is greater than 0 and it isn't already running
 		// because of containerPortInitializer below
-		if (!this.running.get() && this.registration.getNonSecurePort() > 0) {
+		if (!this.running.get() && registration.getNonSecurePort() > 0) {
 
-			this.serviceRegistry.register(this.registration);
+			this.serviceRegistry.register(registration);
 
 			this.context.publishEvent(
-					new InstanceRegisteredEvent<>(this, this.registration.getInstanceConfig()));
+					new InstanceRegisteredEvent<>(this, registration.getInstanceConfig()));
 			this.running.set(true);
 		}
 	}
 	@Override
 	public void stop() {
-		this.serviceRegistry.deregister(this.registration);
+		this.serviceRegistry.deregister(registrationProvider.getIfAvailable());
 		this.running.set(false);
 	}
 

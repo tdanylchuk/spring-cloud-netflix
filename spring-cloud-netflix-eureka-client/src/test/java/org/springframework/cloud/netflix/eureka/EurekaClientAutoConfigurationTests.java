@@ -32,6 +32,7 @@ import org.springframework.boot.context.properties.source.ConfigurationPropertyS
 import org.springframework.boot.test.util.TestPropertyValues;
 import org.springframework.cloud.autoconfigure.RefreshAutoConfiguration;
 import org.springframework.cloud.commons.util.UtilAutoConfiguration;
+import org.springframework.cloud.context.refresh.ContextRefresher;
 import org.springframework.cloud.context.scope.GenericScope;
 import org.springframework.cloud.netflix.eureka.serviceregistry.EurekaRegistration;
 import org.springframework.context.ApplicationContext;
@@ -39,11 +40,14 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MutablePropertySources;
 import org.springframework.core.env.SystemEnvironmentPropertySource;
 
 import com.netflix.appinfo.ApplicationInfoManager;
+import com.netflix.appinfo.HealthCheckHandler;
+import com.netflix.discovery.DiscoveryClient;
 import com.netflix.discovery.EurekaClient;
 import com.netflix.discovery.EurekaClientConfig;
 import com.netflix.discovery.shared.transport.jersey.EurekaJerseyClient;
@@ -51,6 +55,7 @@ import com.sun.jersey.client.apache4.ApacheHttpClient4;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
@@ -478,6 +483,24 @@ public class EurekaClientAutoConfigurationTests {
 			this.context.close();
 			verify(registration).close();
 		}
+	}
+
+	@Test
+	public void eurekaHealthIndicatorProperlyRefreshed() {
+		setupContext(RefreshAutoConfiguration.class);
+//		DiscoveryClient oldDiscoveryClient = this.context.getBean(DiscoveryClient.class);
+
+//		context.refresh();
+
+		ContextRefresher refresher = this.context.getBean(ContextRefresher.class);
+		refresher.refresh();
+
+		DiscoveryClient newDiscoveryClient = this.context.getBean(DiscoveryClient.class);
+
+
+		HealthCheckHandler healthCheckHandler = newDiscoveryClient.getHealthCheckHandler();
+//		assertNotSame("Discovery client should be recreated", oldDiscoveryClient, newDiscoveryClient);
+		assertTrue("Health handler should be EurekaHealthCheckHandler", healthCheckHandler instanceof EurekaHealthCheckHandler);
 	}
 
 	private void testNonSecurePortSystemProp(String propName) {
